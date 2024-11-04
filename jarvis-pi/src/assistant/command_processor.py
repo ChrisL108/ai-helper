@@ -146,6 +146,11 @@ class CommandProcessor:
                     return self._format_event_response(result)
                 
             except json.JSONDecodeError:
+                print("\n" + "="*50)
+                print(f"JSON DECODE ERROR: {response_text}")
+                print(f"Messages: {messages}")
+                print(f"Sending response as plain text")
+                print("="*50 + "\n")
                 # Not a JSON response, return the original response
                 return response_text
                 
