@@ -11,43 +11,49 @@ import time
 class Jarvis:
     def __init__(self):
         logging.basicConfig(level=logging.INFO)
+        self.command_processor = CommandProcessor()
         self.voice_recognizer = VoiceRecognizer()
         self.tts = TextToSpeech()
         self.is_running = True
-        self.command_processor = CommandProcessor()
+
         # Set up signal handler for graceful shutdown
         signal.signal(signal.SIGINT, self.cleanup)
         
+    def speak_and_wait(self, text, voice="onyx"):
+        self.tts.speak(text, voice=voice)
+        self.tts.wait_until_done()
+        # Add extra delay after speaking to avoid echo
+        time.sleep(1.0)
+        
     def run(self):
         """Main loop of the assistant"""
-        self.tts.speak("Hello, I'm Jarvis. How can I help you?", voice="nova")
+        self.speak_and_wait("Hello, I'm Jarvis. How can I help you?")
         
         while self.is_running:
             try:
-                # Wait for any ongoing speech to complete
-                while self.tts.is_speaking:
-                    time.sleep(0.1)
-                
-                # Listen for command
-                text = self.voice_recognizer.listen()
-                
-                if text:
-                    # Process command and get response
-                    response = self.command_processor.process_command(text)
+                if not self.tts.is_speaking:
+                    # # Wait for any ongoing speech to complete
+                    # while self.tts.is_speaking:
+                    #     time.sleep(0.1)
                     
-                    # Speak response
-                    print(f"Response: {response}")
-                    try:    
-                        self.tts.speak(response, voice="nova")
-                    except Exception as e:
-                        logging.error(f"Error speaking response: {e}")
-                        self.tts.speak("I can't talk in code sir.", voice="nova")
+                    # Listen for command
+                    text = self.voice_recognizer.listen()
                     
-                    time.sleep(1)
-                    # Check for exit command
-                    if any(word in response.lower() for word in ["goodbye", "exit", "quit"]):
-                        self.cleanup()
+                    if text:
+                        # Process command and get response
+                        response = self.command_processor.process_command(text)
                         
+                        # Speak response
+                        print(f"User: {text}")
+                        print(f"JARVIS: {response}")
+                        self.speak_and_wait(response)
+                        
+                        # Check for exit command
+                        if any(word in response.lower() for word in ["goodbye", "exit", "quit"]):
+                            self.cleanup()
+                else:
+                    time.sleep(0.1)
+                            
             except Exception as e:
                 logging.error(f"Error in main loop: {e}")
                 

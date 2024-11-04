@@ -22,7 +22,7 @@ class VoiceRecognizer:
         try:
             with self.microphone as source:
                 print("Listening...")
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=5)
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=15)
                 
             print("Recognizing...")
             text = self.recognizer.recognize_google(audio)

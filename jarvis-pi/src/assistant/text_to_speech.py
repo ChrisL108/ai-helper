@@ -14,11 +14,14 @@ class TextToSpeech:
         pygame.mixer.init()
         self.audio_queue = Queue()
         self.is_speaking = False
-        # Start the playback thread
+        self._setup_playback_thread()
+    
+    def _setup_playback_thread(self):
+        """Initialize and start the playback thread"""
         self.playback_thread = threading.Thread(target=self._process_audio_queue, daemon=True)
         self.playback_thread.start()
     
-    def speak(self, text, voice="echo"):
+    def speak(self, text, voice="onyx"):
         """
         Convert text to speech using OpenAI's API and play it immediately
         voice options: alloy, echo, fable, onyx, nova, shimmer
@@ -40,8 +43,13 @@ class TextToSpeech:
             # Add to playback queue
             self.audio_queue.put(audio_data)
             
+            # Wait until speech is complete if needed
+            while self.is_speaking:
+                time.sleep(0.1)
+            
         except Exception as e:
             print(f"Error in text-to-speech: {e}")
+            self.is_speaking = False
 
     def _process_audio_queue(self):
         """Process audio queue in a separate thread"""
@@ -57,7 +65,7 @@ class TextToSpeech:
                 
                 # Wait for audio to finish
                 while pygame.mixer.music.get_busy():
-                    time.sleep(0.1)
+                    time.sleep(0.2)
                 
                 self.is_speaking = False
                 self.audio_queue.task_done()
@@ -65,7 +73,12 @@ class TextToSpeech:
             except Exception as e:
                 print(f"Error in audio playback: {e}")
                 self.is_speaking = False
-    
+
+    def wait_until_done(self):
+        """Wait until all speech is complete"""
+        while self.is_speaking or not self.audio_queue.empty():
+            time.sleep(0.1)
+            
     def cleanup(self):
         """Cleanup pygame resources"""
         pygame.mixer.quit()
