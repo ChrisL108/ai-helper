@@ -23,6 +23,15 @@ coverage
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
+# Python
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+dist/
+build/
+*.spec
+
 # Bower dependency directory (https://bower.io/)
 bower_components
 
