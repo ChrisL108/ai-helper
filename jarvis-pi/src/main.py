@@ -1,14 +1,16 @@
 # src/main.py
 
 import logging
-from assistant.voice_recognition import VoiceRecognizer
-from assistant.text_to_speech import TextToSpeech
-from assistant.command_processor import CommandProcessor
-from gui.ui_handler import AssistantUI
 import signal
 import sys
 import time
 import threading
+from gui.ui_handler import AssistantUI
+from assistant.text_to_speech import TextToSpeech
+from assistant.voice_recognition import VoiceRecognizer
+from assistant.command_processor import CommandProcessor
+from assistant.memory.semantic_memory_store import SemanticMemoryStore
+from assistant.memory.integrated_memory_system import IntegratedMemorySystem
 
 class Jarvis:
     def __init__(self):
@@ -19,6 +21,10 @@ class Jarvis:
         self.is_running = True
         self.ui = AssistantUI()
         self.voice_thread = None
+
+        # Initialize memory systems
+        self.semantic_memory_store = SemanticMemoryStore()
+        self.memory_system = IntegratedMemorySystem(self.semantic_memory_store)
 
         # Set up signal handler for graceful shutdown
         signal.signal(signal.SIGINT, self.cleanup)
@@ -72,6 +78,13 @@ class Jarvis:
             
             # Process command and get response
             response = self.command_processor.process_command(text)
+            
+            # Store interaction in memory system
+            self.memory_system.add_interaction(
+                user_id="1", # TODO: any use for multiple user ids?
+                user_message=text,
+                assistant_response=response
+            )
             
             # Speak response
             print(f"User: {text}")
