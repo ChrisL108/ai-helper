@@ -6,8 +6,10 @@ from openai import OpenAI
 from anthropic import Anthropic
 from typing import Dict, List, Tuple
 from .calendar_handler import CalendarHandler
-from utils.system_utils import get_time, get_current_timezone, get_system_info, get_location, get_top_processes, basic_commands, humanize_time
+from utils.system_utils import get_time, _get_current_timezone, get_system_info, get_location, get_top_processes, basic_commands
 import re
+import time
+from .news.youtube_channel_monitor import YouTubeChannelMonitor
 
 class CommandProcessor:
     def __init__(self, llm_provider="openai"):
@@ -21,7 +23,7 @@ class CommandProcessor:
         
         self.calendar = CalendarHandler()
         self.basic_commands = basic_commands
-        
+        self.news_monitor = YouTubeChannelMonitor()
 
         self.system_prompt = """You are JARVIS, a personal AI assistant for a software engineer with access to various system-level functions. When a user's request requires system information, respond with a JSON action request.
 
@@ -35,13 +37,14 @@ class CommandProcessor:
         }
         
         Available system actions:
-        1. get_time(timezone: str) -> Returns current time in specified timezone
+        1. get_time() -> Returns current time, according to their system
         2. get_system_info() -> Returns OS, CPU, memory info
-        3. get_current_timezone() -> Returns system's current timezone
         4. get_location() -> Returns system's current location (if available)
         5. calendar_next_event() -> Returns the next upcoming event
         6. calendar_get_events(start_time: str, end_time: str) -> Returns events in timeframe
         7. calendar_search(query: str) -> Searches for specific events
+        8. get_top_processes(limit: int) -> Returns top processes by CPU and memory usage
+        9. get_news() -> Returns transcript of specific news for you to summarize
         
         When you need system information, respond with JSON in this format:
         {
@@ -72,7 +75,7 @@ class CommandProcessor:
         }
 
         Only use JSON format when you need system information. For other queries, respond normally.
-        When responding normally, ensure responses are as concise as possible. For example, instead of saying "The current time in your timezone (America/Bahia_Banderas) is 08:00 PM CST.", simply say "It's 8pm".
+        When responding normally, ensure responses are as concise as possible. For example, instead of saying "The current time in your timezone (America/Bahia_Banderas) is 08:00 PM CST.", simply say "It's 8 PM".
         """
 
 
@@ -89,8 +92,10 @@ class CommandProcessor:
         messages.append({"role": "user", "content": text})
         print(f"👀 OpenAI messages:")
         for message in messages:
-            print(f"\n\n➡️ OpenAI message:")
-            print(message if message['role'] != "system" else f"🔍 System prompt: {len(message['content'])} characters")
+            if message['role'] != "system":
+                print(f"➡️ {message['role']}: {message['content']}")
+            else:
+                print(f"🤖 SYSTEM PROMPT LENGTH: {len(message['content'])} characters")
         return messages
 
     def _format_messages_for_claude(self, text: str, context: List[Tuple[str, str, str]]) -> List[Dict]:
@@ -118,7 +123,8 @@ class CommandProcessor:
                     max_tokens=max_tokens,
                     temperature=temperature
                 )
-                return response.choices[0].message.content.strip()
+                print(f"🔍 OpenAI response: {response.choices[0].message.content}")
+                return response.choices[0].message.content
             else:
                 response = self.client.messages.create(
                     model=self.model,
@@ -126,45 +132,68 @@ class CommandProcessor:
                     temperature=temperature,
                     messages=messages
                 )
-                return response['completion'].strip()
+                print(f"🔍 Claude response: {response.content[0].text}")
+                return response.content[0].text
         except Exception as e:
             logging.error(f"Error getting completion: {str(e)}")
             raise
 
-    def _execute_system_action(self, action_request: Dict) -> str:
+    def _execute_system_action(self, action_request: Dict) -> Dict[str, any]:
         """Execute a system action based on the action request"""
         action = action_request.get("action")
         parameters = action_request.get("parameters", {})
         
+        # Get time
         if action == "get_time":
-            timezone = parameters.get("timezone", get_current_timezone())
-            return get_time(timezone)
+            timezone = parameters.get("timezone", _get_current_timezone())
+            return {"send_direct": True, "result": get_time(timezone)}
+        
+        # Get system info
         elif action == "get_system_info":
             system_info = get_system_info()
-            top_processes =  get_top_processes(limit=5)
-            print(f"🔍 System Info: {system_info if system_info else 'No system info available'}, Top Processes: {top_processes if top_processes else 'No top processes available'}")
-            return f"System Info: {system_info if system_info else 'No system info available'}, Top Processes: {top_processes if top_processes else 'No top processes available'}"
-        elif action == "get_current_timezone":
-            timezone = get_current_timezone()
-            # Include the current time in the response
-            current_time = get_time(timezone)
-            return f"Timezone: {timezone}, Current Time: {current_time}"
+            top_processes = get_top_processes(limit=5)
+            result = f"System Info: {system_info if system_info else 'No system info available'}, Top Processes: {top_processes if top_processes else 'No top processes available'}"
+            # print(f"🔍 {result}")
+            return {"send_direct": False, "result": result}
+        
+        # Get location
         elif action == "get_location":
-            return get_location()
+            return {"send_direct": False, "result": get_location()}
+        
+        # Get next calendar event
         elif action == "calendar_next_event":
-            return self.calendar.next_event()
+            return {"send_direct": False, "result": self.calendar.next_event()}
+        
+        # Get events in timeframe
         elif action == "calendar_get_events":
             start_time = parameters.get("start_time")
             end_time = parameters.get("end_time")
-            return self.calendar.get_events(start_time, end_time)
+            return {"send_direct": False, "result": self.calendar.get_events(start_time, end_time)}
+        
+        # Search for events
         elif action == "calendar_search":
             query = parameters.get("query")
-            return self.calendar.search(query)
+            return {"send_direct": False, "result": self.calendar.search(query)}
+        
+        # Get top processes
         elif action == "get_top_processes":
             limit = parameters.get("limit", 5)
-            return get_top_processes(limit=limit)
+            return {"send_direct": False, "result": get_top_processes(limit=limit)}
+        
+        # Get latest news
+        elif action == "get_news":
+            latest = self.news_monitor.get_latest_video_transcript()
+            if latest:
+                print(f"\nLatest Video: {latest['title']}")
+                print(f"Published: {latest['published_at']}")
+                print("\nTranscript excerpt:")
+                print(latest['transcript'][:500] + "...")
+                
+            summary = self.news_monitor.summarize_latest_video(self.client)
+            return {"send_direct": True, "result": summary}
+        
         else:
-            return "Action not recognized"
+            return {"send_direct": False, "result": "Action not recognized"}
         
     def _extract_json_from_response(self, response_text: str) -> str:
         """
@@ -215,8 +244,16 @@ class CommandProcessor:
                 if "action" in action_request:
                     print(f"🔍 Found action request: '{action_request['action']}'")
                     # Execute system action
-                    result = self._execute_system_action(action_request)
-                    print(f"🔍 Action result: {result}")
+                    action_result = self._execute_system_action(action_request)
+                    result = action_result.get("result")
+                    send_direct = action_result.get("send_direct")
+                    
+                    print(f"🔍 Action result: {result}, Direct Response?: {send_direct}")
+                    
+                    if send_direct:
+                        # NOTE: for some reason, w/o this delay the TTS is cutting off the beginning of the response
+                        time.sleep(0.4)
+                        return result
                     
                     # Add result to conversation
                     if self.llm_provider == "openai":

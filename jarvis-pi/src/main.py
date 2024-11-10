@@ -19,6 +19,10 @@ class Jarvis:
         self.ui = AssistantUI()
         self.is_running = True
         self.voice_thread = None
+        
+        # Callback to stop the assistant's active TTS
+        self.ui.stop_callback = self.stop
+        self.ui.exit_callback = self.cleanup
 
         # Initialize memory systems
         # self.memory_system = IntegratedMemorySystem()
@@ -40,10 +44,20 @@ class Jarvis:
         """Main loop of the assistant"""
         
         # Schedule the main loop task before starting the Tkinter main loop
-        self.ui.r.after(100, self.main_loop)
+        self.ui.r.after(50, self.main_loop)
         
         # Start UI in the main thread
         self.ui.run()  # This starts the Tkinter main loop
+        
+    def stop(self):
+        """Stop the assistant and say a message."""
+        # Interrupt the TTS if it's speaking
+        if self.tts.is_speaking:
+            self.tts.stop()
+            self.speak_and_wait("Okay, I'll stop")
+        else:
+            self.speak_and_wait("I wasn't talking, chill")
+        # self.is_running = False
         
     def main_loop(self):
         """Main loop task scheduled with Tkinter's `after` method"""

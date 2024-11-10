@@ -11,14 +11,18 @@ _cached_timezone = None
 def get_time(timezone: str) -> str:
     """Get current time in specified timezone"""
     try:
-        tz = pytz.timezone(timezone) if timezone else pytz.timezone(get_current_timezone())
+        if timezone:
+            tz = pytz.timezone(timezone)
+        else:
+            tz = pytz.timezone(_get_current_timezone())
+        print(f"🔍 Timezone: {tz}")
         current_time = datetime.now(tz)
         return current_time.strftime("%I:%M %p %Z")
     except Exception as e:
         logging.error(f"Error getting time: {e}")
         return None
 
-def get_current_timezone() -> str:
+def _get_current_timezone() -> str:
     """Get system's current timezone in 'Region/City' format, with caching."""
     global _cached_timezone
     
@@ -53,7 +57,7 @@ def get_location() -> Dict[str, Any]:
     -- Not sure if this is a reliable approach
     """
     # TODO: Get location
-    return {"timezone": get_current_timezone()}
+    return "Somewhere over the rainbow"
 
 def get_top_processes(limit=5):
     """Get top processes by CPU and memory usage."""
@@ -61,8 +65,7 @@ def get_top_processes(limit=5):
     processes = []
     for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
         try:
-            logging.info(f"CPU: {proc.info['cpu_percent']} ({type(proc.info['cpu_percent'])}), Memory: {proc.info['memory_percent']} ({type(proc.info['memory_percent'])})")
-            if proc.info['cpu_percent'] is not None and proc.info['memory_percent'] is not None:
+            if proc.info['cpu_percent'] is not None or proc.info['memory_percent'] is not None:
                 processes.append(proc.info)
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
@@ -81,10 +84,10 @@ def humanize_time(timestamp: str) -> str:
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %I:%M %p")
 
 basic_commands = {
-    "time": lambda: get_time(get_current_timezone()),
+    "time": lambda: get_time(),
     "date": lambda: datetime.now().strftime("%Y-%m-%d"),
-    "hello": lambda: "Hello, how can I assist you today?",
-    "goodbye": lambda: "Goodbye! Have a great day.",
+    "hello": lambda: "At your service, wadup!",
+    "goodbye": lambda: "Alright, peace!",
     "exit": lambda: "Shutting down.",
     "quit": lambda: "Shutting it down."
 } 

@@ -32,12 +32,6 @@ dist/
 build/
 *.spec
 
-# Google Calendar
-# Credentials and tokens
-client_secrets.json
-token.pickle
-client_secret_*.json
-
 # Bower dependency directory (https://bower.io/)
 bower_components
 
@@ -88,5 +82,19 @@ typings/
 .serverless
 **/.DS_Store
 .DS_Store
+
+
+# =========================
+# APP-SPECIFIC
+# =========================
+
+# SQLite DBs    
 jarvis-pi/**/*.db
-jarvis-pi/semantic_memory.db
+# YouTube cache
+jarvis-pi/youtube_cache.json
+# Google Calendar
+# Credentials and tokens
+client_secrets.json
+token.pickle
+client_secret_*.json
+

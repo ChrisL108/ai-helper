@@ -5,12 +5,13 @@ from tkinter import ttk
 import random
 
 class AssistantUI:
-    def __init__(self, window_title="Jarvis Assistant"):
+    def __init__(self, window_title="Jarviz"):
         self.r = tk.Tk()
         self.r.title(window_title)
-        self.r.geometry("400x500")
+        self.r.geometry("450x550")
         self.r.configure(bg='#1e1e1e')  # Dark background
-        
+        self.stop_callback = None
+        self.exit_callback = None
         # States and their colors
         self.states = {
             'idle': '#2c3e50',       # Dark blue-gray
@@ -23,7 +24,7 @@ class AssistantUI:
         self.is_running = True
         
         self._setup_ui()
-        # self._animate_pulse()     # Commented out the pulse animation
+        # self._animate_pulse()
         self._animate_lightning()  # Start the lightning animation
         
     def _setup_ui(self):
@@ -60,6 +61,45 @@ class AssistantUI:
         )
         self.transcript.pack(pady=10, padx=20)
         
+        # Frame for buttons
+        button_frame = tk.Frame(self.r, bg='#1e1e1e')
+        button_frame.pack(pady=(0, 10))
+
+        # Stop button
+        self.stop_button_canvas = tk.Canvas(
+            button_frame,
+            width=50,
+            height=50,
+            bg='#1e1e1e',
+            highlightthickness=0
+        )
+        self.stop_button_canvas.pack(side=tk.LEFT, padx=(0, 10))
+
+        # Draw circular red button
+        self.stop_button_canvas.create_oval(
+            5, 5, 45, 45,
+            fill='red',
+            outline='red'
+        )
+
+        # Draw square in the middle
+        self.stop_button_canvas.create_rectangle(
+            20, 20, 30, 30,
+            fill='white',
+            outline='white'
+        )
+
+        # Bind click event to the canvas
+        self.stop_button_canvas.bind("<Button-1>", lambda event: self.on_stop_button_pressed())
+
+        # Exit button
+        self.exit_button = ttk.Button(
+            button_frame,
+            text="Exit",
+            command=self.on_exit_button_pressed
+        )
+        self.exit_button.pack(side=tk.LEFT)
+
         # Configure style for dark theme
         style = ttk.Style()
         style.configure(
@@ -174,6 +214,17 @@ class AssistantUI:
         """Clear the transcript display"""
         self.transcript.delete(1.0, tk.END)
         
+    def on_stop_button_pressed(self):
+        """Handle the stop button press."""
+        if self.stop_callback:
+            self.stop_callback()
+        
+    def on_exit_button_pressed(self):
+        """Handle the exit button press."""
+        if self.exit_callback:
+            self.exit_callback()
+        self.cleanup()
+
     def run(self):
         """Start the UI"""
         self.r.mainloop()
