@@ -5,10 +5,13 @@ import psutil
 from datetime import datetime
 from typing import Dict, Any
 
+# Initialize a cache variable
+_cached_timezone = None
+
 def get_time(timezone: str) -> str:
     """Get current time in specified timezone"""
     try:
-        tz = pytz.timezone(timezone)
+        tz = pytz.timezone(timezone) if timezone else pytz.timezone(get_current_timezone())
         current_time = datetime.now(tz)
         return current_time.strftime("%I:%M %p %Z")
     except Exception as e:
@@ -16,10 +19,25 @@ def get_time(timezone: str) -> str:
         return None
 
 def get_current_timezone() -> str:
-    """Get system's current timezone"""
-    return str(datetime.now().astimezone().tzinfo)
+    """Get system's current timezone in 'Region/City' format, with caching."""
+    global _cached_timezone
+    
+    if _cached_timezone is not None:
+        return _cached_timezone
+    
+    # Get the current time with timezone info
+    current_time = datetime.now().astimezone()
+    # Find the timezone name using pytz
+    for tz in pytz.all_timezones:
+        if datetime.now(pytz.timezone(tz)).utcoffset() == current_time.utcoffset():
+            _cached_timezone = tz
+            return tz
+    
+    _cached_timezone = "UTC"  # Fallback to UTC if no match is found
+    return _cached_timezone
 
 def get_system_info() -> Dict[str, Any]:
+    print("🔍 Getting system info")
     """Get system information"""
     return {
         "os": platform.system(),
@@ -29,11 +47,38 @@ def get_system_info() -> Dict[str, Any]:
     }
 
 def get_location() -> Dict[str, Any]:
+    print("🔍 Getting location 🌎")
     """
     Get system location
     -- Not sure if this is a reliable approach
     """
+    # TODO: Get location
     return {"timezone": get_current_timezone()}
+
+def get_top_processes(limit=5):
+    """Get top processes by CPU and memory usage."""
+    print("🔍 Getting top processes")
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+        try:
+            logging.info(f"CPU: {proc.info['cpu_percent']} ({type(proc.info['cpu_percent'])}), Memory: {proc.info['memory_percent']} ({type(proc.info['memory_percent'])})")
+            if proc.info['cpu_percent'] is not None and proc.info['memory_percent'] is not None:
+                processes.append(proc.info)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    # Sort by CPU and memory usage
+    top_cpu = sorted(processes, key=lambda x: x['cpu_percent'], reverse=True)[:limit]
+    top_memory = sorted(processes, key=lambda x: x['memory_percent'], reverse=True)[:limit]
+
+    return {
+        "top_cpu": top_cpu,
+        "top_memory": top_memory
+    }
+
+def humanize_time(timestamp: str) -> str:
+    """Humanize a timestamp"""
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %I:%M %p")
 
 basic_commands = {
     "time": lambda: get_time(get_current_timezone()),

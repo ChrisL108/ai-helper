@@ -125,10 +125,8 @@ class AssistantUI:
                 
                 # Determine offset range based on current state
                 if self.current_state in ['listening']:
-                    print("Smaller movement")
                     offset_range = (-2, 2)  # Smaller movement
                 else:
-                    print("Larger movement")
                     offset_range = (-30, 30)  # Larger movement
                 
                 for i in range(1, segments):
@@ -158,7 +156,7 @@ class AssistantUI:
         """Set the current state and update UI"""
         if state in self.states:
             self.current_state = state
-            print(f"State changed to: {self.current_state}")  # Debugging print
+            # print(f"State changed to: {self.current_state}")  # Debugging print
             status_texts = {
                 'idle': 'Ready',
                 'listening': 'Listening...',

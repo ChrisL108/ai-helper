@@ -1,5 +1,3 @@
-# src/main.py
-
 import logging
 import signal
 import sys
@@ -9,8 +7,8 @@ from gui.ui_handler import AssistantUI
 from assistant.text_to_speech import TextToSpeech
 from assistant.voice_recognition import VoiceRecognizer
 from assistant.command_processor import CommandProcessor
-from assistant.memory.semantic_memory_store import SemanticMemoryStore
-from assistant.memory.integrated_memory_system import IntegratedMemorySystem
+# from assistant.memory.integrated_memory_system import IntegratedMemorySystem
+from assistant.memory.basic_memory import BasicMemory
 
 class Jarvis:
     def __init__(self):
@@ -18,13 +16,13 @@ class Jarvis:
         self.command_processor = CommandProcessor()
         self.voice_recognizer = VoiceRecognizer()
         self.tts = TextToSpeech()
-        self.is_running = True
         self.ui = AssistantUI()
+        self.is_running = True
         self.voice_thread = None
 
         # Initialize memory systems
-        self.semantic_memory_store = SemanticMemoryStore()
-        self.memory_system = IntegratedMemorySystem(self.semantic_memory_store)
+        # self.memory_system = IntegratedMemorySystem()
+        self.memory_system = BasicMemory()
 
         # Set up signal handler for graceful shutdown
         signal.signal(signal.SIGINT, self.cleanup)
@@ -58,6 +56,7 @@ class Jarvis:
                     if self.voice_thread is None or not self.voice_thread.is_alive():
                         self.voice_thread = threading.Thread(target=self.listen_and_process)
                         self.voice_thread.start()
+                        
                 else:
                     self.ui.set_state("idle")
                             
@@ -70,14 +69,17 @@ class Jarvis:
     def listen_and_process(self):
         """Listen for command and process it"""
         text = self.voice_recognizer.listen()
-        
+
         if text:
             # Update UI with user's text
             self.ui.update_transcript(text, is_user=True)
             self.ui.set_state("processing")
             
+            context = self.memory_system.get_recent_interactions(limit=5)
+            print(f"👀 Context: {context}")
+            
             # Process command and get response
-            response = self.command_processor.process_command(text)
+            response = self.command_processor.process_command(text, context)
             
             # Store interaction in memory system
             self.memory_system.add_interaction(

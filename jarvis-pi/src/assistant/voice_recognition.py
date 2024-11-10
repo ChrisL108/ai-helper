@@ -2,6 +2,8 @@ import speech_recognition as sr
 from datetime import datetime
 import logging
 
+# TODO: add wake word detection
+# TODO: use openai whisper?
 class VoiceRecognizer:
     def __init__(self):
         self.recognizer = sr.Recognizer()
@@ -20,22 +22,23 @@ class VoiceRecognizer:
         text = ""
         
         try:
+            # TODO: add wake word detection?
+            # TODO: is there a way to make this non-blocking?
             with self.microphone as source:
-                print("Listening...")
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=15)
-                
-            print("Recognizing...")
+                # print("Listening... 🎧")
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=None) # 15 was too short
             text = self.recognizer.recognize_google(audio)
-            print("You said: ", text)
+            print("🫵 You said: ", text) if text else None
             
         except sr.WaitTimeoutError:
-            print("Timeout - No speech detected")
+            print("Timeout - No speech detected 🕙")
         except sr.UnknownValueError:
-            print("Could not understand audio")
+            # NOTE: This happens when there is no speech detected
+            pass
         except sr.RequestError as e:
-            print(f"Could not request results; {e}")
+            print(f"Could not request results ⛔️; {e}")
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error ⛔️: {e}")
 
         return text.lower() if text else ""
 

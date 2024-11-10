@@ -88,3 +88,5 @@ typings/
 .serverless
 **/.DS_Store
 .DS_Store
+jarvis-pi/**/*.db
+jarvis-pi/semantic_memory.db

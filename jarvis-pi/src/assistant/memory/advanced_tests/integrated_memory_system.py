@@ -1,6 +1,5 @@
 from typing import List, Dict, Optional, Any, Set
-import redis
-import json
+import sqlite3
 from datetime import datetime, timedelta
 import time
 from dataclasses import dataclass
@@ -8,6 +7,8 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import re
 from collections import Counter
+import json
+from assistant.memory.semantic_memory_store import SemanticMemoryStore
 
 @dataclass
 class Relevance:
@@ -18,31 +19,42 @@ class Relevance:
     IGNORE = 0.0     # Don't store (greetings, acknowledgments)
 
 class IntegratedMemorySystem:
-    def __init__(self, 
-                 semantic_store: 'SemanticMemoryStore',
-                 redis_host='localhost', 
-                 redis_port=6379, 
-                 redis_db=0,
-                 context_ttl: int = 24*60*60):  # 24 hours
+    def __init__(self, db_path=':memory:'): # in-memory db
         """
         Initialize both memory systems.
         
         Args:
             semantic_store: Instance of SemanticMemoryStore for long-term memory
-            redis_host: Redis host for short-term memory
-            redis_port: Redis port
-            redis_db: Redis database number
-            context_ttl: Time to live for Redis entries in seconds
+            db_path: Path to the SQLite database file
         """
-        self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
-        self.semantic_store = semantic_store
-        self.context_ttl = context_ttl
+        self.semantic_memory_store = SemanticMemoryStore()
+        self.conn = sqlite3.connect(db_path)
+        self._create_tables()
         # Load model for importance detection
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
         
-    def _get_user_key(self, user_id: str, key_type: str) -> str:
-        """Generate Redis key for different types of user data."""
-        return f"user:{user_id}:{key_type}"
+    def _create_tables(self):
+        """Create necessary tables in the SQLite database."""
+        with self.conn:
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS interactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
+                    timestamp REAL,
+                    relevance REAL,
+                    user_message TEXT,
+                    assistant_response TEXT,
+                    metadata TEXT
+                )
+            ''')
+            self.conn.execute('''
+                CREATE TABLE IF NOT EXISTS recent_contexts (
+                    user_id TEXT,
+                    interaction_id INTEGER,
+                    relevance REAL,
+                    FOREIGN KEY(interaction_id) REFERENCES interactions(id)
+                )
+            ''')
 
     def add_interaction(self, 
                        user_id: str,
@@ -55,7 +67,9 @@ class IntegratedMemorySystem:
         """
         # Auto-detect relevance if not provided
         if relevance is None:
-            relevance = self._detect_relevance(user_message, assistant_response)
+            # TODO: implement relevance detection
+            # relevance = self._detect_relevance(user_message, assistant_response)
+            relevance = Relevance.MEDIUM
             
         timestamp = time.time()
         interaction = {
@@ -63,118 +77,60 @@ class IntegratedMemorySystem:
             'relevance': relevance,
             'user_message': user_message,
             'assistant_response': assistant_response,
-            'metadata': metadata or {}
+            'metadata': json.dumps(metadata or {})
         }
         
-        # Store in Redis
-        interaction_key = f"interaction:{timestamp}"
-        full_key = self._get_user_key(user_id, interaction_key)
-        
-        pipeline = self.redis.pipeline()
-        
-        # Store full interaction
-        pipeline.setex(
-            full_key,
-            self.context_ttl,
-            json.dumps(interaction)
-        )
-        
-        # Add to sorted set for relevance tracking
-        context_key = self._get_user_key(user_id, "recent_contexts")
-        pipeline.zadd(context_key, {full_key: relevance})
-        pipeline.expire(context_key, self.context_ttl)
+        # Store in SQLite
+        with self.conn:
+            cursor = self.conn.execute('''
+                INSERT INTO interactions (user_id, timestamp, relevance, user_message, assistant_response, metadata)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, timestamp, relevance, user_message, assistant_response, interaction['metadata']))
+            interaction_id = cursor.lastrowid
+            
+            # Add to recent contexts
+            self.conn.execute('''
+                INSERT INTO recent_contexts (user_id, interaction_id, relevance)
+                VALUES (?, ?, ?)
+            ''', (user_id, interaction_id, relevance))
         
         # If critical or high relevance, extract and store immediately
         if relevance >= Relevance.HIGH:
             self._extract_and_store_semantic_memory(user_id, interaction)
-            
-        pipeline.execute()
-
-    def _detect_relevance(self, user_message: str, assistant_response: str) -> float:
-        """
-        Automatically detect relevance of an interaction.
-        Uses heuristics and embeddings to determine importance.
-        """
-        combined_text = f"{user_message} {assistant_response}"
-        
-        # Check for high-importance indicators
-        critical_patterns = [
-            r"(?i)remember this",
-            r"(?i)important",
-            r"(?i)don't forget",
-            r"(?i)always",
-            r"(?i)never",
-            r"(?i)must",
-            r"(?i)prefer",
-            r"(?i)allerg",
-            r"(?i)call me",
-            r"(?i)my name"
-        ]
-        
-        for pattern in critical_patterns:
-            if re.search(pattern, combined_text):
-                return Relevance.CRITICAL
-        
-        # Check for low-importance indicators
-        ignore_patterns = [
-            r"(?i)^hi$",
-            r"(?i)^hello$",
-            r"(?i)^thanks?$",
-            r"(?i)^okay$",
-            r"(?i)^bye$"
-        ]
-        
-        for pattern in ignore_patterns:
-            if re.search(pattern, combined_text):
-                return Relevance.IGNORE
-        
-        # Use embedding similarity to known important topics
-        # This could be expanded based on your specific needs
-        important_topics = [
-            "preference", "fact", "information", "detail",
-            "remember", "important", "specific", "personal"
-        ]
-        
-        text_embedding = self.model.encode(combined_text)
-        topic_embeddings = self.model.encode(important_topics)
-        
-        # Calculate max similarity to important topics
-        similarities = np.dot(topic_embeddings, text_embedding) / (
-            np.linalg.norm(topic_embeddings, axis=1) * np.linalg.norm(text_embedding)
-        )
-        max_similarity = float(np.max(similarities))
-        
-        # Convert similarity to relevance score
-        if max_similarity > 0.8:
-            return Relevance.HIGH
-        elif max_similarity > 0.6:
-            return Relevance.MEDIUM
-        else:
-            return Relevance.LOW
 
     def end_session(self, user_id: str) -> None:
         """
         End a conversation session, processing all context for long-term storage.
         """
         # Get all interactions for this user
-        context_key = self._get_user_key(user_id, "recent_contexts")
-        interaction_keys = self.redis.zrange(context_key, 0, -1)
+        with self.conn:
+            interaction_ids = self.conn.execute('''
+                SELECT interaction_id FROM recent_contexts WHERE user_id = ?
+            ''', (user_id,)).fetchall()
         
         interactions = []
-        for key in interaction_keys:
-            data = self.redis.get(key)
+        for (interaction_id,) in interaction_ids:
+            data = self.conn.execute('''
+                SELECT * FROM interactions WHERE id = ?
+            ''', (interaction_id,)).fetchone()
             if data:
-                interactions.append(json.loads(data))
+                interactions.append({
+                    'timestamp': data[2],
+                    'relevance': data[3],
+                    'user_message': data[4],
+                    'assistant_response': data[5],
+                    'metadata': json.loads(data[6])
+                })
         
         # Process interactions for semantic memories
         self._process_session_context(user_id, interactions)
         
-        # Clean up Redis
-        pipeline = self.redis.pipeline()
-        for key in interaction_keys:
-            pipeline.delete(key)
-        pipeline.delete(context_key)
-        pipeline.execute()
+        # Clean up SQLite
+        with self.conn:
+            self.conn.execute('DELETE FROM recent_contexts WHERE user_id = ?', (user_id,))
+            self.conn.execute('DELETE FROM interactions WHERE id IN ({})'.format(
+                ','.join('?' for _ in interaction_ids)
+            ), [interaction_id for (interaction_id,) in interaction_ids])
 
     def _process_session_context(self, user_id: str, interactions: List[Dict]) -> None:
         """
