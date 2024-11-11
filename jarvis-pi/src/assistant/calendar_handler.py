@@ -5,10 +5,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
+from pathlib import Path
 import os.path
 import pickle
 import os.path
-from pathlib import Path
 
 class CalendarHandler:
     def __init__(self):
@@ -36,16 +36,27 @@ class CalendarHandler:
         
         # If no valid credentials available, let user log in
         if not self.creds or not self.creds.valid:
-            if self.creds and self.creds.expired and self.creds.refresh_token:
-                self.creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.secrets_path, self.SCOPES)
+            try:
+                if self.creds and self.creds.expired and self.creds.refresh_token:
+                    self.creds.refresh(Request())
+                else:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.secrets_path, self.SCOPES)
                 self.creds = flow.run_local_server(port=0)
             
-            # Save credentials for future use
-            with open(token_file, 'wb') as token:
-                pickle.dump(self.creds, token)
+                # Save credentials for future use
+                with open(token_file, 'wb') as token:
+                    pickle.dump(self.creds, token)
+            except Exception as e:
+                print(f"Error during authentication: {e}")
+                # Optionally, delete the token file to force re-authentication
+                if os.path.exists(token_file):
+                    print(f"🚨 Deleting token file: {token_file}")
+                    os.remove(token_file)
+                    
+                    # TODO - add retry count limit and retry auth after deleting token file
+                    # self._authenticate()
+                raise e
         
         self.service = build('calendar', 'v3', credentials=self.creds)
     
