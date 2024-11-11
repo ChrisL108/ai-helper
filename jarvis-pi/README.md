@@ -1,11 +1,11 @@
-# Jarvis Project
+# Jarviz
 
 This repository contains the code for the Jarvis project, which includes a personal AI assistant and a web interface built with Next.js.
 
 ## Project Structure
 
 - **jarvis-pi**: Contains the code for the AI assistant, which includes voice recognition, text-to-speech, and command processing.
-- **jarvis-web**: (Coming Soon) - Electron desktop app for interacting with the assistant.
+- **jarviz**: (Coming Soon) - Electron desktop app for interacting with the assistant.
 
 ## Getting Started
 
@@ -49,8 +49,6 @@ This repository contains the code for the Jarvis project, which includes a perso
 4. **Set Environment Variables**
 
    Ensure you set the appropriate environment variables in your virtual environment. You can do this by creating a `.env` file in the `jarvis-pi` directory with the necessary variables, such as `YOUTUBE_API_KEY` and `OPENAI_API_KEY`.
-
-### Setting Up the Web Application (Coming Soon)
 
 
 ## Learn More

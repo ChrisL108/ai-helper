@@ -9,6 +9,7 @@ class ToolingManager:
     def __init__(self):
         # Widgets
         self.calendar = CalendarHandler()
+        # TODO - add to news monitor: RSS Feeds (e.g. https://www.infowars.com/rss.xml)
         self.news_monitor = YouTubeChannelMonitor()
         # Formatting / Helpers
         self.format_messages_for_openai = format_messages_for_openai
